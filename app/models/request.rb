@@ -131,7 +131,22 @@ class Request < ApplicationRecord
     max_retries = SettingsService.get(:max_retries)
 
     with_lock do
+      base_delay_hours = SettingsService.get(:retry_base_delay_hours)
+      max_delay_days = SettingsService.get(:retry_max_delay_days)
+      max_delay_hours = max_delay_days * 24
+
       if retry_count >= max_retries
+        if monitored_hardcover_series_request?
+          update!(
+            status: :not_found,
+            attention_needed: false,
+            issue_description: nil,
+            retry_count: max_retries,
+            next_retry_at: Time.current + max_delay_hours.hours
+          )
+          return true
+        end
+
         mark_for_attention!(
           "Maximum retry attempts (#{max_retries}) exceeded. Manual intervention required.",
           status: :not_found,
@@ -140,16 +155,14 @@ class Request < ApplicationRecord
         return false
       end
 
-      base_delay_hours = SettingsService.get(:retry_base_delay_hours)
-      max_delay_days = SettingsService.get(:retry_max_delay_days)
-      max_delay_hours = max_delay_days * 24
-
       # Exponential backoff: base * 2^retry_count, capped at max
       delay_hours = [ base_delay_hours * (2 ** retry_count), max_delay_hours ].min
 
       increment!(:retry_count)
       update!(
         status: :not_found,
+        attention_needed: false,
+        issue_description: nil,
         next_retry_at: Time.current + delay_hours.hours
       )
     end
@@ -517,6 +530,12 @@ class Request < ApplicationRecord
   end
 
   # Check if retry is due
+  def monitored_hardcover_series_request?
+    book&.audiobook? &&
+      collection_source.to_s == "hardcover" &&
+      collection_id.present?
+  end
+
   def retry_due?
     not_found? && next_retry_at.present? && next_retry_at <= Time.current
   end
