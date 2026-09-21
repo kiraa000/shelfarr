@@ -68,6 +68,49 @@ class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
     assert watched.reload.last_success_at.present?
   end
 
+  test "re-arms requests that exhausted normal not-found retries" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "987",
+      title: "Test Series",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "Future Book",
+      book_type: :audiobook,
+      hardcover_id: "444"
+    )
+    request = Request.create!(
+      user: @user,
+      book: book,
+      status: :not_found,
+      retry_count: 11,
+      attention_needed: true,
+      issue_description: "Maximum retry attempts (10) exceeded. Manual intervention required."
+    )
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:444",
+      source_work_ids: [ "hardcover:444" ],
+      metadata_attrs: {
+        title: "Future Book",
+        series: "Test Series",
+        series_position: "3"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      assert_no_difference "Request.count" do
+        WatchedSeriesRefreshService.call(watched)
+      end
+    end
+
+    request.reload
+    assert request.pending?
+    assert_equal 0, request.retry_count
+    assert_not request.attention_needed?
+  end
+
   test "does not re-request a previously known failed series book" do
     watched = WatchedSeries.create!(
       user: @user,
