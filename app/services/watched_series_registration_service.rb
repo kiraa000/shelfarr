@@ -2,7 +2,7 @@
 
 class WatchedSeriesRegistrationService
   class << self
-    def register!(user:, collection_source:, collection_id:, title:, book_types:, language: nil)
+    def register!(user:, collection_source:, collection_id:, title:, book_types:, language: nil, enabled: true)
       return unless collection_source.to_s == "hardcover"
       return unless SettingsService.get(:hardcover_series_watch_enabled, default: true)
 
@@ -18,7 +18,7 @@ class WatchedSeriesRegistrationService
       watched.title = title.to_s.presence || watched.title || "Hardcover Series #{collection_id}"
       watched.book_types = (watched.normalized_book_types + normalized_types).uniq
       watched.language = language.presence || watched.language
-      watched.enabled = true
+      watched.enabled = ActiveModel::Type::Boolean.new.cast(enabled)
       watched.last_error = nil
       watched.save!
       watched
@@ -56,8 +56,7 @@ class WatchedSeriesRegistrationService
           )
           .distinct
           .pluck("books.book_type")
-          .filter_map { |value| Book.book_types.key(value) }
-          .map(&:to_s)
+          .filter_map { |value| normalize_book_type(value) }
           .select { |type| type == "audiobook" }
 
         next if types.empty?
@@ -67,12 +66,22 @@ class WatchedSeriesRegistrationService
           collection_source: "hardcover",
           collection_id: collection_id,
           title: collection_title,
-          book_types: types
+          book_types: types,
+          enabled: true
         )
         count += 1
       end
 
       count
+    end
+
+    private
+
+    def normalize_book_type(value)
+      string_value = value.to_s
+      return string_value if Book.book_types.key?(string_value)
+
+      Book.book_types.key(value)
     end
   end
 end
