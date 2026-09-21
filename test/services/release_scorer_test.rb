@@ -317,7 +317,7 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert_equal "13", result.breakdown[:requested_series_position]
     assert_equal "13", result.breakdown[:detected_series_position]
     assert result.breakdown[:auto_select_allowed]
-    assert_operator result.total, :>=, 90
+    assert_operator result.total, :>, ReleaseScorer::AUDIOBOOK_SERIES_UNKNOWN_MAX_SCORE
   end
 
   test "infers book one from collection metadata when stored series position is missing" do
