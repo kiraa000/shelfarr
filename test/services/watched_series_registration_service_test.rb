@@ -8,7 +8,7 @@ class WatchedSeriesRegistrationServiceTest < ActiveSupport::TestCase
     SettingsService.set(:hardcover_series_watch_enabled, true)
   end
 
-  test "registers an exact Hardcover series id and merges requested formats" do
+  test "registers an exact Hardcover series id for audiobooks only" do
     watched = WatchedSeriesRegistrationService.register!(
       user: @user,
       collection_source: "hardcover",
@@ -26,7 +26,7 @@ class WatchedSeriesRegistrationServiceTest < ActiveSupport::TestCase
     )
 
     assert_equal "987", watched.reload.collection_id
-    assert_equal %w[audiobook ebook], watched.normalized_book_types.sort
+    assert_equal [ "audiobook" ], watched.normalized_book_types
     assert watched.enabled?
   end
 
