@@ -749,6 +749,47 @@ class SearchJobTest < ActiveJob::TestCase
     end
   end
 
+  test "monitored Hardcover series waits and retries when results are unsafe for auto-select" do
+    SettingsService.set(:auto_select_enabled, true)
+    SettingsService.set(:max_retries, 10)
+    SettingsService.set(:retry_base_delay_hours, 1)
+    SettingsService.set(:retry_max_delay_days, 7)
+
+    book = Book.create!(
+      title: "Future Series Book 20",
+      author: "Series Author",
+      book_type: :audiobook,
+      series: "Future Series",
+      series_position: "20",
+      hardcover_id: "future-20"
+    )
+    request = Request.create!(
+      book: book,
+      user: users(:one),
+      status: :searching,
+      collection_source: "hardcover",
+      collection_id: "987",
+      collection_title: "Future Series",
+      external_source: "series_watch"
+    )
+
+    failed_selection = AutoSelectService::Result.new(
+      success: false,
+      search_result: nil,
+      reason: :below_threshold
+    )
+
+    AutoSelectService.stub(:call, failed_selection) do
+      SearchJob.new.send(:attempt_auto_select, request)
+    end
+
+    request.reload
+    assert request.not_found?
+    assert_not request.attention_needed?
+    assert_nil request.issue_description
+    assert request.next_retry_at.present?
+  end
+
   test "marks for attention when auto-select is disabled and results found" do
     SettingsService.set(:auto_select_enabled, false)
 
