@@ -6,6 +6,13 @@ class ReleaseScorer
   COMIC_ISSUE_EXACT_BONUS = 15
   COMIC_ISSUE_UNKNOWN_MAX_SCORE = 49
   COMIC_ISSUE_VALUE_PATTERN = '\d+(?:\.\d+)?(?:[a-z]|-[a-z])?'
+  AUDIOBOOK_ADAPTATION_PENALTY = -25
+  AUDIOBOOK_ADAPTATION_PATTERNS = [
+    /\bdramat(?:ization|isation|ized|ised)\b/i,
+    /\bradio\s+(?:drama|play|dramatization|dramatisation)\b/i,
+    /\baudio\s+drama\b/i,
+    /\bbig\s+finish\b/i
+  ].freeze
 
   ROMAN_NUMBER_TOKENS = {
     "II" => "2",
@@ -61,9 +68,11 @@ class ReleaseScorer
   def score
     issue_status = @comic_issue_match&.fetch(:status, nil)
     format_score = calculate_format_score
+    adaptation = audiobook_adaptation?
     auto_select_allowed = @format_preferences.auto_select_allowed &&
       !explicit_format_conflict? &&
       !ambiguous_title_alias_match? &&
+      !adaptation &&
       (@comic_issue_match.nil? || issue_status == :exact)
     breakdown = {
       title: calculate_title_score,
@@ -76,7 +85,9 @@ class ReleaseScorer
       extension: @format_preferences.matched_extension,
       extensions: @format_preferences.detected_extensions,
       audiobook_structure: @format_preferences.audiobook_structure,
-      audio_bitrate_kbps: @format_preferences.audio_bitrate_kbps
+      audio_bitrate_kbps: @format_preferences.audio_bitrate_kbps,
+      audiobook_adaptation: adaptation,
+      audiobook_adaptation_adjustment: adaptation ? AUDIOBOOK_ADAPTATION_PENALTY : 0
     }
     if @comic_issue_match
       breakdown.merge!(
@@ -92,7 +103,12 @@ class ReleaseScorer
       (breakdown[key] * weight) / 100.0
     end.round
 
-    total = (base_total + @format_preferences.score_adjustment + comic_issue_adjustment).clamp(0, 100)
+    total = (
+      base_total +
+      @format_preferences.score_adjustment +
+      comic_issue_adjustment +
+      (adaptation ? AUDIOBOOK_ADAPTATION_PENALTY : 0)
+    ).clamp(0, 100)
     total = [ total, COMIC_ISSUE_UNKNOWN_MAX_SCORE ].min if issue_status == :unknown
     total = 0 if issue_status == :mismatch
 
@@ -391,6 +407,12 @@ class ReleaseScorer
     return @book.comic_vine_id.to_s.start_with?("4000-") if requested_year.blank?
 
     detected[:run_year] != requested_year
+  end
+
+  def audiobook_adaptation?
+    return false unless @book.audiobook?
+
+    AUDIOBOOK_ADAPTATION_PATTERNS.any? { |pattern| @search_result.title.to_s.match?(pattern) }
   end
 
   def explicit_format_conflict?
