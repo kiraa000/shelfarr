@@ -48,7 +48,9 @@ class SeriesBacklogService
 
         pending.each do |entry|
           begin
-            series = HardcoverClient.find_series_exact(entry.fetch("name"))
+            series = with_short_rate_limit_retry do
+              HardcoverClient.find_series_exact(entry.fetch("name"))
+            end
 
             result = RequestCreationService.call(
               user: user,
@@ -77,6 +79,13 @@ class SeriesBacklogService
             entry["resolved_name"] = series.name
             entry["error"] = nil
             entry["queued_at"] = Time.current.iso8601
+          rescue HardcoverClient::AuthenticationError => e
+            entry["status"] = "error"
+            entry["error"] = "#{e.class}: #{e.message}"
+            break
+          rescue HardcoverClient::RateLimitError => e
+            entry["error"] = "#{e.class}: #{e.message}"
+            break
           rescue StandardError => e
             entry["status"] = "error"
             entry["error"] = "#{e.class}: #{e.message}"
@@ -150,6 +159,21 @@ class SeriesBacklogService
         "last_run_at" => nil,
         "last_run_limit" => nil
       }
+    end
+
+    def with_short_rate_limit_retry(max_attempts: 3, max_sleep: 10)
+      attempts = 0
+
+      begin
+        attempts += 1
+        yield
+      rescue HardcoverClient::RateLimitError => e
+        retry_after = e.retry_after.to_i
+        raise if attempts >= max_attempts || retry_after <= 0 || retry_after > max_sleep
+
+        sleep retry_after
+        retry
+      end
     end
 
     def normalized_name(name)
