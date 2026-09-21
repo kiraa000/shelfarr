@@ -35,8 +35,8 @@ class WatchedSeriesRefreshService
 
         existing_book = Book.find_in_lookup(existing_lookup, item_work_ids, book_type: book_type)
         if existing_book
-          repair_series_metadata(existing_book, item)
-          enqueue_library_metadata_sync(existing_book)
+          repaired = repair_series_metadata(existing_book, item)
+          enqueue_library_metadata_sync(existing_book) if repaired
           rearm_exhausted_retry(existing_book)
           skipped_items += 1
           next
