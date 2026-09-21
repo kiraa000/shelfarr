@@ -65,6 +65,13 @@ Rails.application.routes.draw do
     end
   end
 
+  # Watched audiobook series
+  resources :watched_series, only: [ :index, :update ] do
+    member do
+      post :refresh
+    end
+  end
+
   # User Uploads
   resources :uploads, only: [ :index, :new, :create, :show ]
 
