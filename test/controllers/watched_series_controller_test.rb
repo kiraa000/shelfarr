@@ -5,10 +5,7 @@ require "test_helper"
 class WatchedSeriesControllerTest < ActionDispatch::IntegrationTest
   setup do
     @user = users(:one)
-    post session_path, params: {
-      username: @user.username,
-      password: "password"
-    }
+    sign_in_as(@user)
     @watched = WatchedSeries.create!(
       user: @user,
       collection_source: "hardcover",
