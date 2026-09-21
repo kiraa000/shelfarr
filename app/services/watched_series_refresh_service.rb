@@ -33,7 +33,9 @@ class WatchedSeriesRefreshService
       watched_series.normalized_book_types.each do |book_type|
         item_work_ids = [ item.work_id, *Array(item.source_work_ids) ].compact_blank.uniq
 
-        if Book.find_in_lookup(existing_lookup, item_work_ids, book_type: book_type)
+        existing_book = Book.find_in_lookup(existing_lookup, item_work_ids, book_type: book_type)
+        if existing_book
+          rearm_exhausted_retry(existing_book)
           skipped_items += 1
           next
         end
@@ -96,4 +98,19 @@ class WatchedSeriesRefreshService
   private
 
   attr_reader :watched_series
+
+  def rearm_exhausted_retry(book)
+    request = book.requests
+      .where(status: :not_found, attention_needed: true)
+      .order(updated_at: :desc)
+      .detect { |candidate| candidate.issue_description.to_s.start_with?("Maximum retry attempts") }
+    return false unless request
+
+    request.update!(retry_count: 0)
+    request.retry_now!
+    Rails.logger.info(
+      "[WatchedSeriesRefreshService] Re-armed exhausted request ##{request.id} for watched series #{watched_series.title}"
+    )
+    true
+  end
 end
