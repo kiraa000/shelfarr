@@ -16,5 +16,10 @@ module DownloadClients
     def api_key
       nil
     end
+
+    def adapter_specific_add_torrent_params
+      provider = SettingsService.get(:decypharr_debrid_provider, default: "").to_s.strip
+      provider.present? ? { debrid: provider } : {}
+    end
   end
 end
