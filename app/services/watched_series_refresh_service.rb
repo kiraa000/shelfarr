@@ -37,6 +37,7 @@ class WatchedSeriesRefreshService
         if existing_book
           repaired = repair_series_metadata(existing_book, item)
           enqueue_library_metadata_sync(existing_book) if repaired
+          normalize_monitored_requests(existing_book)
           rearm_exhausted_retry(existing_book)
           skipped_items += 1
           next
@@ -100,6 +101,25 @@ class WatchedSeriesRefreshService
   private
 
   attr_reader :watched_series
+
+  def normalize_monitored_requests(book)
+    retry_at = 1.day.from_now
+    max_retries = SettingsService.get(:max_retries).to_i
+
+    book.requests.each do |request|
+      next unless request.monitored_hardcover_series_request?
+      next if request.completed? || request.failed? || request.downloading? || request.processing?
+      next unless request.attention_needed? || request.next_retry_at.blank?
+
+      request.update!(
+        status: :not_found,
+        attention_needed: false,
+        issue_description: nil,
+        retry_count: [ request.retry_count.to_i, max_retries ].min,
+        next_retry_at: retry_at
+      )
+    end
+  end
 
   def enqueue_library_metadata_sync(book)
     return false unless book.file_path.present?
