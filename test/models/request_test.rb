@@ -68,6 +68,14 @@ class RequestTest < ActiveSupport::TestCase
       collection_title: "Future Series",
       external_source: "series_watch"
     )
+    WatchedSeries.create!(
+      user: users(:one),
+      collection_source: "hardcover",
+      collection_id: "987",
+      title: "Future Series",
+      book_types: [ "audiobook" ],
+      enabled: true
+    )
 
     assert request.schedule_retry!
 
