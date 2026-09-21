@@ -531,9 +531,15 @@ class Request < ApplicationRecord
 
   # Check if retry is due
   def monitored_hardcover_series_request?
-    book&.audiobook? &&
-      collection_source.to_s == "hardcover" &&
-      collection_id.present?
+    return false unless book&.audiobook?
+    return false unless collection_source.to_s == "hardcover"
+    return false if collection_id.blank? || user_id.blank?
+
+    WatchedSeries.enabled.exists?(
+      user_id: user_id,
+      collection_source: "hardcover",
+      collection_id: collection_id.to_s
+    )
   end
 
   def retry_due?
