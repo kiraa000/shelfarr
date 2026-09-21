@@ -41,6 +41,11 @@ class WatchedSeriesRegistrationService
       rows.each do |user_id, collection_id, collection_title|
         user = User.active.find_by(id: user_id)
         next unless user
+        next if WatchedSeries.exists?(
+          user_id: user_id,
+          collection_source: "hardcover",
+          collection_id: collection_id.to_s
+        )
 
         types = Request
           .joins(:book)
