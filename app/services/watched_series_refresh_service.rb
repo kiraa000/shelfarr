@@ -109,7 +109,7 @@ class WatchedSeriesRefreshService
     book.requests.each do |request|
       next unless request.monitored_hardcover_series_request?
       next if request.completed? || request.failed? || request.downloading? || request.processing?
-      next unless request.attention_needed? || request.next_retry_at.blank?
+      next unless request.attention_needed? || (request.not_found? && request.next_retry_at.blank?)
 
       request.update!(
         status: :not_found,
