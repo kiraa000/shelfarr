@@ -111,6 +111,44 @@ class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
     assert_not request.attention_needed?
   end
 
+  test "repairs missing series metadata on an existing watched book" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "29395",
+      title: "The Primal Hunter",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "The Primal Hunter",
+      author: "Zogarth",
+      book_type: :audiobook,
+      hardcover_id: "111",
+      series: nil,
+      series_position: nil
+    )
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:111",
+      source_work_ids: [ "hardcover:111" ],
+      metadata_attrs: {
+        title: "The Primal Hunter",
+        author: "Zogarth",
+        series: "The Primal Hunter",
+        series_position: "1"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      assert_no_difference "Request.count" do
+        WatchedSeriesRefreshService.call(watched)
+      end
+    end
+
+    book.reload
+    assert_equal "The Primal Hunter", book.series
+    assert_equal "1", book.series_position
+  end
+
   test "does not re-request a previously known failed series book" do
     watched = WatchedSeries.create!(
       user: @user,
