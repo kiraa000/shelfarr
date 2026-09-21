@@ -235,6 +235,7 @@ class SettingsService
     # Hardcover Integration
     hardcover_enabled: { type: "boolean", default: true, category: "hardcover", description: "Enable Hardcover as a metadata provider when an API token is configured" },
     hardcover_api_token: { type: "string", default: "", category: "hardcover", description: "API token from Hardcover account settings (hardcover.app/account/api)" },
+    hardcover_series_watch_enabled: { type: "boolean", default: true, category: "hardcover", description: "Automatically watch requested Hardcover series and request newly added books during the daily series refresh." },
     metadata_source: { type: "string", default: "auto", category: "hardcover", description: "Legacy metadata source selector. Auto uses all enabled providers; selecting a provider restricts metadata search to that provider." },
     metadata_provider_priority: { type: "string", default: "hardcover,openlibrary,google_books,comic_vine", category: "hardcover", description: "Comma-separated metadata provider priority used when merging duplicate search results." },
     hardcover_search_limit: { type: "integer", default: 10, category: "hardcover", description: "Maximum number of search results from Hardcover" },
