@@ -429,4 +429,98 @@ class AudiobookshelfClientTest < ActiveSupport::TestCase
       end
     end
   end
+
+  test "find_item_by_relative_path matches ABS relPath" do
+    VCR.turned_off do
+      stub_request(
+        :get,
+        "http://localhost:13378/api/libraries/audio-lib/items?limit=500&page=0"
+      )
+        .with(headers: { "Authorization" => "Bearer test-api-key-12345" })
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "results" => [
+              {
+                "id" => "abs-ph3",
+                "path" => "/shelfarr-audiobooks/Zogarth/The Primal Hunter 3",
+                "relPath" => "Zogarth/The Primal Hunter 3"
+              }
+            ],
+            "total" => 1
+          }.to_json
+        )
+
+      item = AudiobookshelfClient.find_item_by_relative_path(
+        "audio-lib",
+        "/Zogarth/The Primal Hunter 3/"
+      )
+
+      assert_equal "abs-ph3", item["id"]
+    end
+  end
+
+  test "update_book_metadata sends Shelfarr metadata to ABS" do
+    book = books(:audiobook_acquired)
+    book.update!(
+      title: "The Primal Hunter 3",
+      author: "Zogarth",
+      narrator: "Travis Baldree",
+      series: "The Primal Hunter",
+      series_position: "3",
+      year: 2022,
+      publisher: "Aethon Audio",
+      language: "en",
+      description: "Test description",
+      isbn: "9780000000001"
+    )
+
+    expected = {
+      "metadata" => {
+        "title" => "The Primal Hunter 3",
+        "authors" => [
+          { "name" => "Zogarth" }
+        ],
+        "narrators" => [
+          "Travis Baldree"
+        ],
+        "series" => [
+          {
+            "name" => "The Primal Hunter",
+            "sequence" => "3"
+          }
+        ],
+        "publishedYear" => 2022,
+        "publisher" => "Aethon Audio",
+        "language" => "en",
+        "description" => "Test description",
+        "isbn" => "9780000000001"
+      }
+    }
+
+    VCR.turned_off do
+      request_stub = stub_request(
+        :patch,
+        "http://localhost:13378/api/items/abs-ph3/media"
+      )
+        .with(
+          headers: { "Authorization" => "Bearer test-api-key-12345" }
+        ) do |request|
+          JSON.parse(request.body) == expected
+        end
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: {
+            "updated" => true
+          }.to_json
+        )
+
+      assert AudiobookshelfClient.update_book_metadata("abs-ph3", book)
+      assert_requested request_stub, times: 1
+    end
+  end
+
+
 end

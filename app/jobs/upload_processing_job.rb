@@ -1003,6 +1003,10 @@ class UploadProcessingJob < ApplicationJob
 
     LibraryPlatformClient.scan_library(library_id)
     AudiobookshelfLibrarySyncJob.schedule_post_scan_refresh!
+
+    if LibraryPlatformClient.active_platform == "audiobookshelf"
+      AudiobookshelfMetadataSyncJob.perform_later(book.id)
+    end
     Rails.logger.info "[UploadProcessingJob] Triggered library scan for book ##{book.id}"
   rescue LibraryPlatformClient::Error => e
     Rails.logger.warn "[UploadProcessingJob] Failed to trigger library scan (#{e.class})"

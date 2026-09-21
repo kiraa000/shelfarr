@@ -72,6 +72,92 @@ class AudiobookshelfClient
       items
     end
 
+    # Find an Audiobookshelf item using the path relative to its library root.
+    # This avoids comparing container-specific absolute paths.
+    def find_item_by_relative_path(library_id, relative_path, page_size: 500)
+      ensure_configured!
+
+      target = normalize_relative_path(relative_path)
+      page = 0
+
+      loop do
+        response = request do
+          connection.get(
+            "/api/libraries/#{library_id}/items",
+            { limit: page_size, page: page }
+          )
+        end
+
+        raise Error,
+          "Audiobookshelf library #{library_id} returned status #{response.status}" unless response.status == 200
+
+        raw_items =
+          response.body["results"] ||
+          response.body["items"] ||
+          response.body["libraryItems"] ||
+          []
+
+        item = raw_items.find do |raw_item|
+          normalize_relative_path(raw_item["relPath"]) == target
+        end
+
+        return item if item
+
+        break if end_of_items?(raw_items, response.body, page_size, page)
+        page += 1
+      end
+
+      nil
+    end
+
+    # Push Shelfarr's known book metadata into Audiobookshelf.
+    def update_book_metadata(item_id, book)
+      ensure_configured!
+
+      metadata = {}
+
+      metadata["title"] = book.title if book.title.present?
+
+      if book.author.present?
+        metadata["authors"] = [
+          { "name" => book.author }
+        ]
+      end
+
+      if book.narrator.present?
+        metadata["narrators"] = [ book.narrator ]
+      end
+
+      if book.series.present?
+        series_entry = { "name" => book.series }
+
+        if book.series_position.present?
+          series_entry["sequence"] = book.series_position.to_s
+        end
+
+        metadata["series"] = [ series_entry ]
+      end
+
+      metadata["publishedYear"] = book.year if book.year.present?
+      metadata["publisher"] = book.publisher if book.publisher.present?
+      metadata["language"] = book.language if book.language.present?
+      metadata["description"] = book.description if book.description.present?
+      metadata["isbn"] = book.isbn if book.isbn.present?
+
+      return false if metadata.empty?
+
+      response = request do
+        connection.patch(
+          "/api/items/#{item_id}/media",
+          { "metadata" => metadata }
+        )
+      end
+
+      handle_response(response) do |data|
+        data["updated"] != false
+      end
+    end
+
     # GET /api/libraries/:id/items - Find item by path
     def find_item_by_path(path)
       ensure_configured!
@@ -144,6 +230,14 @@ class AudiobookshelfClient
     end
 
     private
+
+    def normalize_relative_path(value)
+      value
+        .to_s
+        .tr("\\\\", "/")
+        .sub(%r{\A/+}, "")
+        .sub(%r{/+\z}, "")
+    end
 
     def ensure_configured!
       raise NotConfiguredError, "#{display_name} is not configured" unless configured?

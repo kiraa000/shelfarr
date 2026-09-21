@@ -1681,6 +1681,10 @@ class PostProcessingJob < ApplicationJob
 
     LibraryPlatformClient.scan_library(lib_id)
     AudiobookshelfLibrarySyncJob.schedule_post_scan_refresh!
+
+    if LibraryPlatformClient.active_platform == "audiobookshelf"
+      AudiobookshelfMetadataSyncJob.perform_later(book.id)
+    end
     Rails.logger.info "[PostProcessingJob] Triggered library scan for book ##{book.id}"
   rescue LibraryPlatformClient::Error => e
     Rails.logger.warn "[PostProcessingJob] Library scan failed for book ##{book.id}: #{e.class}"
