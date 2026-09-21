@@ -256,6 +256,7 @@ class SearchController < ApplicationController
     )
     @available_book_types = RequestOptionPolicy.book_types_for(@content_kind)
     @collection_entries = collection_entries
+    @watch_series_enabled = watched_series_enabled_default
 
     redirect_to search_path, alert: "Missing title information" if @work_id.blank? || @title.blank?
   end
@@ -272,6 +273,16 @@ class SearchController < ApplicationController
   end
 
   private
+
+  def watched_series_enabled_default
+    return true unless @collection_source.to_s == "hardcover" && @collection_id.present?
+
+    existing = Current.user.watched_series.find_by(
+      collection_source: "hardcover",
+      collection_id: @collection_id.to_s
+    )
+    existing ? existing.enabled? : true
+  end
 
   def details_handoff_metadata
     metadata = RequestMetadataHandoff.fetch(user: Current.user, token: params[:metadata_token])
