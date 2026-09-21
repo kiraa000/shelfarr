@@ -204,6 +204,51 @@ class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
     assert request.next_retry_at.present?
   end
 
+  test "does not delay a fresh pending monitored request" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "29395",
+      title: "The Primal Hunter",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "The Primal Hunter 18",
+      author: "Zogarth",
+      book_type: :audiobook,
+      hardcover_id: "778",
+      series: "The Primal Hunter",
+      series_position: "18"
+    )
+    request = Request.create!(
+      user: @user,
+      book: book,
+      status: :pending,
+      collection_source: "hardcover",
+      collection_id: "29395",
+      collection_title: "The Primal Hunter"
+    )
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:778",
+      source_work_ids: [ "hardcover:778" ],
+      metadata_attrs: {
+        title: "The Primal Hunter 18",
+        author: "Zogarth",
+        series: "The Primal Hunter",
+        series_position: "18"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      WatchedSeriesRefreshService.call(watched)
+    end
+
+    request.reload
+    assert request.pending?
+    assert_nil request.next_retry_at
+    assert_not request.attention_needed?
+  end
+
   test "does not re-request a previously known failed series book" do
     watched = WatchedSeries.create!(
       user: @user,
