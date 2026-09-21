@@ -20,6 +20,12 @@ module RequestsHelper
     "failed" => "bg-red-500/20 text-red-400"
   }.freeze
 
+  def request_status_label(request)
+    return "Waiting" if request.not_found? && request.monitored_hardcover_series_request?
+
+    request.status.humanize
+  end
+
   def request_status_color(status)
     REQUEST_STATUS_COLORS[status.to_s] || "bg-gray-700 text-gray-300"
   end
