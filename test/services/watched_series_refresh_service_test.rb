@@ -156,6 +156,54 @@ class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
     assert_equal "1", book.series_position
   end
 
+  test "clears legacy attention noise for monitored Hardcover series requests" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "29395",
+      title: "The Primal Hunter",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "The Primal Hunter 17",
+      author: "Zogarth",
+      book_type: :audiobook,
+      hardcover_id: "777",
+      series: "The Primal Hunter",
+      series_position: "17"
+    )
+    request = Request.create!(
+      user: @user,
+      book: book,
+      status: :searching,
+      attention_needed: true,
+      issue_description: "Search results found but none matched auto-select criteria. Please review and select a result manually.",
+      collection_source: "hardcover",
+      collection_id: "29395",
+      collection_title: "The Primal Hunter"
+    )
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:777",
+      source_work_ids: [ "hardcover:777" ],
+      metadata_attrs: {
+        title: "The Primal Hunter 17",
+        author: "Zogarth",
+        series: "The Primal Hunter",
+        series_position: "17"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      WatchedSeriesRefreshService.call(watched)
+    end
+
+    request.reload
+    assert request.not_found?
+    assert_not request.attention_needed?
+    assert_nil request.issue_description
+    assert request.next_retry_at.present?
+  end
+
   test "does not re-request a previously known failed series book" do
     watched = WatchedSeries.create!(
       user: @user,
