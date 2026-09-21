@@ -169,6 +169,43 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:author] == 100
   end
 
+  test "does not treat an embedded reference to the requested title as the release identity" do
+    SettingsService.set(:ebook_approved_formats, [])
+    SettingsService.set(:ebook_rejected_formats, [])
+    SettingsService.set(:ebook_preferred_formats, [])
+    SettingsService.set(:ebook_prefer_single_file, false)
+    SettingsService.set(:ebook_prefer_higher_bitrate, false)
+
+    book = Book.create!(
+      title: "The Time Machine",
+      author: "H. G. Wells",
+      book_type: :ebook
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    title_first = ReleaseScorer.score(
+      SearchResult.new(title: "The Time Machine by H. G. Wells EPUB", seeders: 6),
+      request
+    )
+    author_first = ReleaseScorer.score(
+      SearchResult.new(title: "H. G. Wells - The Time Machine EPUB", seeders: 6),
+      request
+    )
+    inspired_by = ReleaseScorer.score(
+      SearchResult.new(title: "Timelines: Stories Inspired by H.G. Wells' The Time Machine EPUB", seeders: 57),
+      request
+    )
+
+    assert_equal 100, title_first.breakdown[:title]
+    assert_equal 100, author_first.breakdown[:title]
+    assert title_first.breakdown[:auto_select_allowed]
+    assert author_first.breakdown[:auto_select_allowed]
+
+    assert_operator inspired_by.breakdown[:title], :<, 100
+    refute inspired_by.breakdown[:auto_select_allowed]
+    assert_operator inspired_by.total, :<, title_first.total
+  end
+
   test "scores localized and original components of a combined title as aliases" do
     SettingsService.set(:ebook_approved_formats, [])
     SettingsService.set(:ebook_rejected_formats, [])
