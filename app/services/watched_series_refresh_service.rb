@@ -70,11 +70,12 @@ class WatchedSeriesRefreshService
     end
 
     now = Time.current
-    watched_series.update!(
+    attributes = {
       last_checked_at: now,
-      last_success_at: now,
       last_error: errors.presence&.join("; ")
-    )
+    }
+    attributes[:last_success_at] = now if errors.empty?
+    watched_series.update!(attributes)
 
     Result.new(
       created_requests: created_requests,
