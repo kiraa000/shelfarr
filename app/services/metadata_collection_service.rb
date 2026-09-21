@@ -70,8 +70,6 @@ class MetadataCollectionService
     when "hardcover"
       hardcover_items
     end
-  rescue HardcoverClient::RateLimitError
-    raise
   rescue HardcoverClient::Error, ComicVineClient::Error => e
     raise Error, "Could not load collection metadata: #{e.message}"
   end
