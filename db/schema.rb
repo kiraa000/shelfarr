@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_08_131000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_20_212000) do
   create_table "acquisition_providers", force: :cascade do |t|
     t.boolean "allow_private_network", default: false, null: false
     t.string "api_key"
@@ -67,6 +67,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_08_131000) do
     t.integer "acquisition_reservation_owner_id"
     t.string "acquisition_reservation_owner_type"
     t.string "acquisition_reservation_token"
+    t.string "asin"
     t.string "author"
     t.integer "book_type", default: 0, null: false
     t.string "comic_vine_id"
@@ -95,6 +96,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_08_131000) do
     t.datetime "updated_at", null: false
     t.integer "year"
     t.index ["acquisition_reservation_token"], name: "index_books_on_acquisition_reservation_token", unique: true, where: "acquisition_reservation_token IS NOT NULL"
+    t.index ["asin"], name: "index_books_on_asin"
     t.index ["book_type"], name: "index_books_on_book_type"
     t.index ["comic_vine_id"], name: "index_books_on_comic_vine_id"
     t.index ["content_kind"], name: "index_books_on_content_kind"

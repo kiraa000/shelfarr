@@ -422,4 +422,96 @@ class BookMetadataBackfillJobTest < ActiveJob::TestCase
 
     assert book.reload.metadata_backfill_checked_at.present?
   end
+
+  test "scheduled runs include Hardcover audiobooks missing identifiers even with complete series metadata" do
+    book = Book.create!(
+      title: "Identifier Backfill Audiobook",
+      author: "Test Author",
+      book_type: :audiobook,
+      hardcover_id: "91001",
+      series: "Complete Series",
+      series_position: "3",
+      isbn: nil,
+      asin: nil
+    )
+
+    processed = []
+
+    BookMetadataBackfillService.stub(:apply!, false) do
+      HardcoverIdentifierBackfillService.stub(:apply!, lambda { |candidate|
+        processed << candidate.id
+        false
+      }) do
+        BookMetadataBackfillJob.perform_now
+      end
+    end
+
+    assert_includes processed, book.id
+    assert book.reload.metadata_backfill_checked_at.present?
+  end
+
+  test "identifier enrichment queues Audiobookshelf metadata sync for acquired books" do
+    clear_enqueued_jobs
+
+    book = Book.create!(
+      title: "Synced Audiobook",
+      author: "Test Author",
+      book_type: :audiobook,
+      hardcover_id: "91002",
+      series: "Test Series",
+      series_position: "2",
+      file_path: "/audiobooks/Test Author/Synced Audiobook",
+      isbn: nil,
+      asin: nil
+    )
+
+    BookMetadataBackfillService.stub(:apply!, false) do
+      HardcoverIdentifierBackfillService.stub(:apply!, lambda { |candidate|
+        candidate.update!(asin: "B0TESTSYNC1")
+        true
+      }) do
+        LibraryPlatformClient.stub(:active_platform, "audiobookshelf") do
+          AudiobookshelfClient.stub(:configured?, true) do
+            BookMetadataBackfillJob.perform_now(book_ids: [ book.id ])
+          end
+        end
+      end
+    end
+
+    assert_equal "B0TESTSYNC1", book.reload.asin
+
+    assert_enqueued_with(
+      job: AudiobookshelfMetadataSyncJob,
+      args: [ book.id ]
+    )
+  end
+
+  test "identifier rate limits leave the book eligible for retry" do
+    book = Book.create!(
+      title: "Rate Limited Identifier Audiobook",
+      author: "Test Author",
+      book_type: :audiobook,
+      hardcover_id: "91003",
+      series: "Test Series",
+      series_position: "1",
+      isbn: nil,
+      asin: nil
+    )
+
+    BookMetadataBackfillService.stub(:apply!, false) do
+      HardcoverIdentifierBackfillService.stub(:apply!, lambda { |_candidate|
+        raise HardcoverClient::RateLimitError.new(
+          "limited",
+          retry_after: 120
+        )
+      }) do
+        BookMetadataBackfillJob.perform_now(book_ids: [ book.id ])
+      end
+    end
+
+    assert_nil book.reload.metadata_backfill_checked_at
+    assert_nil book.asin
+    assert_nil book.isbn
+  end
+
 end

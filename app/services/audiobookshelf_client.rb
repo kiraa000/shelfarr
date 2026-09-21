@@ -143,6 +143,7 @@ class AudiobookshelfClient
       metadata["language"] = book.language if book.language.present?
       metadata["description"] = book.description if book.description.present?
       metadata["isbn"] = book.isbn if book.isbn.present?
+      metadata["asin"] = book.asin if book.asin.present?
 
       return false if metadata.empty?
 

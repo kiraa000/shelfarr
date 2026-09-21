@@ -473,7 +473,8 @@ class AudiobookshelfClientTest < ActiveSupport::TestCase
       publisher: "Aethon Audio",
       language: "en",
       description: "Test description",
-      isbn: "9780000000001"
+      isbn: "9780000000001",
+      asin: "B0B6JRLWVY"
     )
 
     expected = {
@@ -495,7 +496,8 @@ class AudiobookshelfClientTest < ActiveSupport::TestCase
         "publisher" => "Aethon Audio",
         "language" => "en",
         "description" => "Test description",
-        "isbn" => "9780000000001"
+        "isbn" => "9780000000001",
+        "asin" => "B0B6JRLWVY"
       }
     }
 

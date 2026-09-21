@@ -60,7 +60,17 @@ class BookMetadataBackfillJob < ApplicationJob
       .where(series_start_year: nil)
       .where("comic_vine_id LIKE ?", "4000-%")
 
-    missing_metadata = missing_series.or(missing_comic_run_year)
+    missing_audiobook_identifiers = Book
+      .where(book_type: Book.book_types[:audiobook])
+      .where.not(hardcover_id: [ nil, "" ])
+      .where(
+        "COALESCE(TRIM(isbn), '') = '' OR COALESCE(TRIM(asin), '') = ''"
+      )
+
+    missing_metadata = missing_series
+      .or(missing_comic_run_year)
+      .or(missing_audiobook_identifiers)
+
     missing_metadata.where(
       "metadata_backfill_checked_at IS NULL OR metadata_backfill_checked_at <= ?",
       RECHECK_INTERVAL.ago
@@ -78,12 +88,20 @@ class BookMetadataBackfillJob < ApplicationJob
       return :processed
     end
 
-    BookMetadataBackfillService.apply!(
+    metadata_changed = BookMetadataBackfillService.apply!(
       book,
       work_id: work_id,
       raise_lookup_errors: true
     )
+
+    identifier_changed = backfill_hardcover_identifiers!(book)
+
     mark_checked!(book)
+
+    if metadata_changed || identifier_changed
+      enqueue_audiobookshelf_metadata_sync(book)
+    end
+
     :processed
   rescue HardcoverClient::NotFoundError
     mark_checked!(book)
@@ -97,6 +115,22 @@ class BookMetadataBackfillJob < ApplicationJob
   rescue StandardError => e
     Rails.logger.warn("[BookMetadataBackfillJob] Failed for book #{book.id}: #{e.message}")
     :processed
+  end
+
+  def backfill_hardcover_identifiers!(book)
+    return false unless book.audiobook?
+    return false if book.hardcover_id.blank?
+    return false if book.isbn.present? && book.asin.present?
+
+    HardcoverIdentifierBackfillService.apply!(book)
+  end
+
+  def enqueue_audiobookshelf_metadata_sync(book)
+    return unless book.file_path.present?
+    return unless LibraryPlatformClient.active_platform == "audiobookshelf"
+    return unless AudiobookshelfClient.configured?
+
+    AudiobookshelfMetadataSyncJob.perform_later(book.id)
   end
 
   def ordered_for_backfill(books)

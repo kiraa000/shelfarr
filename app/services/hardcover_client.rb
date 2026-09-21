@@ -68,6 +68,13 @@ class HardcoverClient
     end
   end
 
+  EditionDetails = Data.define(
+    :id, :title, :asin, :audio_seconds, :edition_format,
+    :reading_format_id, :isbn_10, :isbn_10_valid,
+    :isbn_13, :isbn_13_valid, :isbns_match,
+    :release_date, :release_year
+  )
+
   class << self
     def configured?
       SettingsService.get(:hardcover_enabled, default: true) && SettingsService.hardcover_configured?
@@ -150,6 +157,56 @@ class HardcoverClient
       raise NotFoundError, "Book not found: #{book_id}" if books.empty?
 
       parse_book_details(books.first)
+    end
+
+    def book_editions(book_id)
+      ensure_configured!
+
+      query_string = <<~GRAPHQL
+        query GetBookEditions($bookId: Int!) {
+          editions(
+            where: { book_id: { _eq: $bookId } }
+            order_by: { id: asc }
+          ) {
+            id
+            title
+            asin
+            audio_seconds
+            edition_format
+            reading_format_id
+            isbn_10
+            isbn_10_valid
+            isbn_13
+            isbn_13_valid
+            isbns_match
+            release_date
+            release_year
+          }
+        }
+      GRAPHQL
+
+      response = execute_query(
+        query_string,
+        { bookId: book_id.to_i }
+      )
+
+      Array(response.dig("data", "editions")).map do |edition|
+        EditionDetails.new(
+          id: edition["id"],
+          title: edition["title"],
+          asin: edition["asin"],
+          audio_seconds: edition["audio_seconds"],
+          edition_format: edition["edition_format"],
+          reading_format_id: edition["reading_format_id"],
+          isbn_10: edition["isbn_10"],
+          isbn_10_valid: edition["isbn_10_valid"],
+          isbn_13: edition["isbn_13"],
+          isbn_13_valid: edition["isbn_13_valid"],
+          isbns_match: edition["isbns_match"],
+          release_date: edition["release_date"],
+          release_year: edition["release_year"]
+        )
+      end
     end
 
     def series_books(series_id, limit: nil)
