@@ -6,7 +6,7 @@ class WatchedSeriesRegistrationService
       return unless collection_source.to_s == "hardcover"
       return unless SettingsService.get(:hardcover_series_watch_enabled, default: true)
 
-      normalized_types = Array(book_types).map(&:to_s).select { |type| Book.book_types.key?(type) }.uniq
+      normalized_types = Array(book_types).map(&:to_s).select { |type| type == "audiobook" }.uniq
       return if normalized_types.empty?
 
       watched = WatchedSeries.find_or_initialize_by(
@@ -58,6 +58,7 @@ class WatchedSeriesRegistrationService
           .pluck("books.book_type")
           .filter_map { |value| Book.book_types.key(value) }
           .map(&:to_s)
+          .select { |type| type == "audiobook" }
 
         next if types.empty?
 
