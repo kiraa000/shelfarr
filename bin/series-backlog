@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../config/environment"
+
+command = ARGV.shift.to_s
+
+case command
+when "add"
+  abort "Usage: bin/series-backlog add SERIES [SERIES ...]" if ARGV.empty?
+  state = SeriesBacklogService.add(ARGV)
+when "run"
+  limit = ARGV.shift.presence || SeriesBacklogService::DEFAULT_DAILY_LIMIT
+  state = SeriesBacklogService.run(limit: limit)
+when "status"
+  state = SeriesBacklogService.state
+when "retry-errors"
+  state = SeriesBacklogService.retry_errors
+else
+  abort <<~USAGE
+    Usage:
+      bin/series-backlog add SERIES [SERIES ...]
+      bin/series-backlog run [LIMIT]
+      bin/series-backlog status
+      bin/series-backlog retry-errors
+  USAGE
+end
+
+puts JSON.pretty_generate(state)
