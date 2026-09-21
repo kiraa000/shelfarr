@@ -201,6 +201,19 @@
           <% end %>
         </div>
 
+        <% if @collection_source == "hardcover" && @available_book_types.include?("audiobook") %>
+          <div class="mt-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <%= hidden_field_tag :watch_series, "false" %>
+            <label class="flex cursor-pointer items-start gap-3">
+              <%= check_box_tag :watch_series, "true", @watch_series_enabled, class: "mt-1 rounded border-gray-600 bg-gray-800 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-gray-900" %>
+              <span>
+                <span class="block text-sm font-medium text-emerald-200">Watch for new audiobooks</span>
+                <span class="mt-1 block text-xs text-emerald-100/70">Automatically monitor this exact Hardcover series for future books and side material. Enabled by default.</span>
+              </span>
+            </label>
+          </div>
+        <% end %>
+
         <div class="mt-5 flex flex-wrap gap-3" data-bulk-select-target="actions">
           <% @available_book_types.each do |book_type| %>
             <%= button_tag "Request Selected (#{type_labels.fetch(book_type, book_type.titleize)})", name: "book_type", value: book_type, class: "rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-500" %>
