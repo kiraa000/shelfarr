@@ -287,6 +287,39 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:author] == 80
   end
 
+  test "matches audiobook series when release omits a leading article from the series name" do
+    book = Book.create!(
+      title: "Footwizard: Spellmonger, Book 13",
+      author: "Terry Mancour",
+      book_type: :audiobook,
+      series: "The Spellmonger",
+      series_position: "13"
+    )
+    request = Request.create!(
+      book: book,
+      user: @user,
+      status: :pending,
+      language: "en",
+      collection_source: "hardcover",
+      collection_id: "spellmonger-series",
+      collection_title: "The Spellmonger"
+    )
+
+    result = ReleaseScorer.score(
+      SearchResult.new(
+        title: "Footwizard: Spellmonger, Book 13 - Terry Mancour [M4B] [64 Kbps]",
+        seeders: 1
+      ),
+      request
+    )
+
+    assert_equal :exact, result.breakdown[:audiobook_series_match]
+    assert_equal "13", result.breakdown[:requested_series_position]
+    assert_equal "13", result.breakdown[:detected_series_position]
+    assert result.breakdown[:auto_select_allowed]
+    assert_operator result.total, :>=, 90
+  end
+
   test "infers book one from collection metadata when stored series position is missing" do
     book = Book.create!(
       title: "The Primal Hunter",
