@@ -36,6 +36,7 @@ class WatchedSeriesRefreshService
         existing_book = Book.find_in_lookup(existing_lookup, item_work_ids, book_type: book_type)
         if existing_book
           repair_series_metadata(existing_book, item)
+          enqueue_library_metadata_sync(existing_book)
           rearm_exhausted_retry(existing_book)
           skipped_items += 1
           next
@@ -99,6 +100,15 @@ class WatchedSeriesRefreshService
   private
 
   attr_reader :watched_series
+
+  def enqueue_library_metadata_sync(book)
+    return false unless book.file_path.present?
+    return false unless LibraryPlatformClient.active_platform == "audiobookshelf"
+    return false unless AudiobookshelfClient.configured?
+
+    AudiobookshelfMetadataSyncJob.perform_later(book.id)
+    true
+  end
 
   def repair_series_metadata(book, item)
     attrs = item.metadata_attrs
