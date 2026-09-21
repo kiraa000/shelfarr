@@ -202,9 +202,11 @@ class ReleaseParserService
     /\bML\b/
   ].freeze
 
+  AUDIOBOOK_EXTENSIONS = %w[m4b m4a mp3 ogg opus].freeze
+
   # Audiobook format indicators
   AUDIOBOOK_PATTERNS = [
-    /\baudiobook\b/i,
+    /\baudio[\s._-]?book\b/i,
     /\bm4b\b/i,
     /\bunabridged\b/i,
     /\babridged\b/i,
@@ -235,6 +237,8 @@ class ReleaseParserService
     "m4b" => /\bm4b\b/i,
     "m4a" => /\bm4a\b/i,
     "mp3" => /\bmp3\b/i,
+    "ogg" => /\bogg\b/i,
+    "opus" => /\bopus\b/i,
     "epub" => /\bepub\b/i,
     "pdf" => /\bpdf\b/i,
     "mobi" => /\bmobi\b/i,
@@ -258,8 +262,7 @@ class ReleaseParserService
     /\bchaptered\b/i,
     /\bcd\s?\d+\b/i,
     /\bdisc\s?\d+\b/i,
-    /\bpart\s?\d+\b/i,
-    /\bmp3\b/i
+    /\bpart\s?\d+\b/i
   ].freeze
 
   BITRATE_PATTERN = /(?<!\d)(\d{2,3})\s?kbps\b/i
@@ -332,6 +335,7 @@ class ReleaseParserService
       return :audiobook if AUDIOBOOK_PATTERNS.any? { |pattern| title.match?(pattern) }
       return :comicbook if COMICBOOK_PATTERNS.any? { |pattern| title.match?(pattern) }
       return :ebook if EBOOK_PATTERNS.any? { |pattern| title.match?(pattern) }
+      return :audiobook if (detect_extensions(title) & AUDIOBOOK_EXTENSIONS).any?
 
       nil
     end
