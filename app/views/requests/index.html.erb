@@ -15,7 +15,7 @@
           { key: "active", label: "Active", path: requests_path(query_params.merge(status: "active")), count: @active_count },
           { key: "awaiting_purchase", label: "Store Offers", path: requests_path(query_params.merge(status: "awaiting_purchase")) },
           { key: "completed", label: "Completed", path: requests_path(query_params.merge(status: "completed")) },
-          { key: "not_found", label: "Not Found", path: requests_path(query_params.merge(status: "not_found")) },
+          { key: "not_found", label: "Waiting / Not Found", path: requests_path(query_params.merge(status: "not_found")) },
           { key: "failed", label: "Cancelled", path: requests_path(query_params.merge(status: "failed")) }
         ]
       %>
