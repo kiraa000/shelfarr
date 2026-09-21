@@ -35,6 +35,7 @@ class WatchedSeriesRefreshService
 
         existing_book = Book.find_in_lookup(existing_lookup, item_work_ids, book_type: book_type)
         if existing_book
+          repair_series_metadata(existing_book, item)
           rearm_exhausted_retry(existing_book)
           skipped_items += 1
           next
@@ -98,6 +99,20 @@ class WatchedSeriesRefreshService
   private
 
   attr_reader :watched_series
+
+  def repair_series_metadata(book, item)
+    attrs = item.metadata_attrs
+    updates = {}
+    updates[:series] = attrs[:series] if book.series.blank? && attrs[:series].present?
+    updates[:series_position] = attrs[:series_position] if book.series_position.blank? && attrs[:series_position].present?
+    return false if updates.empty?
+
+    book.update!(updates)
+    Rails.logger.info(
+      "[WatchedSeriesRefreshService] Repaired series metadata for book ##{book.id}: #{updates.inspect}"
+    )
+    true
+  end
 
   def rearm_exhausted_retry(book)
     request = book.requests
