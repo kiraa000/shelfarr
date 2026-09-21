@@ -287,6 +287,105 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:author] == 80
   end
 
+  test "rejects a conflicting audiobook installment even when the series title matches" do
+    book = Book.create!(
+      title: "The Primal Hunter",
+      author: "Zogarth",
+      book_type: :audiobook,
+      series: "The Primal Hunter",
+      series_position: "1"
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    correct = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+    wrong = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter 3 - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+
+    assert_equal :exact, correct.breakdown[:audiobook_series_match]
+    assert correct.breakdown[:auto_select_allowed]
+    assert_equal :mismatch, wrong.breakdown[:audiobook_series_match]
+    assert_equal "3", wrong.breakdown[:detected_series_position]
+    assert_equal 0, wrong.total
+    refute wrong.breakdown[:auto_select_allowed]
+  end
+
+  test "requires an explicit installment number for later audiobook series books" do
+    book = Book.create!(
+      title: "The Primal Hunter 3: A LitRPG Adventure",
+      author: "Zogarth",
+      book_type: :audiobook,
+      series: "The Primal Hunter",
+      series_position: "3"
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    exact = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter III - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+    missing = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+
+    assert_equal :exact, exact.breakdown[:audiobook_series_match]
+    assert_equal "3", exact.breakdown[:detected_series_position]
+    assert exact.breakdown[:auto_select_allowed]
+
+    assert_equal :unknown, missing.breakdown[:audiobook_series_match]
+    assert_operator missing.total, :<=, ReleaseScorer::AUDIOBOOK_SERIES_UNKNOWN_MAX_SCORE
+    refute missing.breakdown[:auto_select_allowed]
+  end
+
+  test "does not confuse a number inside an audiobook series name with the installment" do
+    book = Book.create!(
+      title: "12 Miles Below II",
+      author: "Mark Arrows",
+      book_type: :audiobook,
+      series: "12 Miles Below",
+      series_position: "2"
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    exact = ReleaseScorer.score(
+      SearchResult.new(title: "12 Miles Below 2 - Mark Arrows [M4B]", seeders: 5),
+      request
+    )
+    wrong = ReleaseScorer.score(
+      SearchResult.new(title: "12 Miles Below 3 - Mark Arrows [M4B]", seeders: 5),
+      request
+    )
+
+    assert_equal :exact, exact.breakdown[:audiobook_series_match]
+    assert_equal :mismatch, wrong.breakdown[:audiobook_series_match]
+    assert_equal 0, wrong.total
+  end
+
+  test "matches fractional audiobook series positions for side material" do
+    book = Book.create!(
+      title: "Test Series Side Story",
+      author: "Test Author",
+      book_type: :audiobook,
+      series: "Test Series",
+      series_position: "1.5"
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    result = ReleaseScorer.score(
+      SearchResult.new(title: "Test Series 1.5 - Test Author [M4B]", seeders: 5),
+      request
+    )
+
+    assert_equal :exact, result.breakdown[:audiobook_series_match]
+    assert_equal "1.5", result.breakdown[:detected_series_position]
+    assert result.breakdown[:auto_select_allowed]
+  end
+
   test "treats roman and arabic series numbers as equivalent in title matching" do
     book = Book.create!(
       title: "The Perfect Run III",
