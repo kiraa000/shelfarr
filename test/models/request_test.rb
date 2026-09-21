@@ -16,6 +16,56 @@ class RequestTest < ActiveSupport::TestCase
     }, Request.statuses)
   end
 
+  test "monitored Hardcover audiobook series requests keep retrying after the normal limit without attention" do
+    SettingsService.set(:max_retries, 2)
+    SettingsService.set(:retry_max_delay_days, 7)
+
+    book = Book.create!(
+      title: "Future Series Book",
+      book_type: :audiobook,
+      hardcover_id: "future-series-book"
+    )
+    request = Request.create!(
+      book: book,
+      user: users(:one),
+      status: :not_found,
+      retry_count: 2,
+      attention_needed: true,
+      issue_description: "Maximum retry attempts (2) exceeded. Manual intervention required.",
+      request_scope: "single",
+      collection_source: "hardcover",
+      collection_id: "987",
+      collection_title: "Future Series",
+      external_source: "series_watch"
+    )
+
+    assert request.schedule_retry!
+
+    request.reload
+    assert request.not_found?
+    assert_not request.attention_needed?
+    assert_nil request.issue_description
+    assert_equal 2, request.retry_count
+    assert_in_delta 7.days.from_now, request.next_retry_at, 2.seconds
+  end
+
+  test "ordinary requests still require attention after the normal retry limit" do
+    SettingsService.set(:max_retries, 2)
+
+    request = Request.create!(
+      book: books(:ebook_pending),
+      user: users(:one),
+      status: :not_found,
+      retry_count: 2
+    )
+
+    assert_not request.schedule_retry!
+
+    request.reload
+    assert request.attention_needed?
+    assert_match(/Maximum retry attempts/, request.issue_description)
+  end
+
   test "treats awaiting purchase as open and retryable but not actively acquiring" do
     request = Request.create!(
       book: books(:ebook_pending),
