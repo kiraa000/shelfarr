@@ -58,6 +58,12 @@ default: &default
     args:
       - scheduled: true
     schedule: every minute
+  series_backlog:
+    class: SeriesBacklogJob
+    queue: default
+    args:
+      - limit: 10
+    schedule: at 8am every day
 
 development:
   <<: *default
