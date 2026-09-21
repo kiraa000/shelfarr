@@ -153,6 +153,7 @@ class RequestsController < ApplicationController
     @collection_id = metadata[:collection_id]
     @collection_title = metadata[:collection_title]
     @available_book_types = RequestOptionPolicy.book_types_for(@content_kind)
+    @watch_series_enabled = watched_series_enabled_default
 
     if @work_id.blank? || @title.blank?
       redirect_to search_path, alert: "Missing book information"
@@ -177,7 +178,8 @@ class RequestsController < ApplicationController
       notes: params[:notes],
       language: params[:language],
       source_work_ids: params[:source_work_ids],
-      collection_item_ids: params[:collection_item_ids]
+      collection_item_ids: params[:collection_item_ids],
+      watch_series: watch_series_param
     )
 
     if result.queued?
@@ -799,6 +801,22 @@ class RequestsController < ApplicationController
         )
       end
     end
+  end
+
+  def watched_series_enabled_default
+    return true unless @collection_source.to_s == "hardcover" && @collection_id.present?
+
+    existing = Current.user.watched_series.find_by(
+      collection_source: "hardcover",
+      collection_id: @collection_id.to_s
+    )
+    existing ? existing.enabled? : true
+  end
+
+  def watch_series_param
+    return true unless params.key?(:watch_series)
+
+    ActiveModel::Type::Boolean.new.cast(params[:watch_series])
   end
 
   def request_metadata_attrs
