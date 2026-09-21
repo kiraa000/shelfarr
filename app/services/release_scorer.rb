@@ -429,8 +429,8 @@ class ReleaseScorer
     requested = normalize_series_position(@book.series_position)
     return unless requested
 
-    release_title = normalize_for_matching(@search_result.title)
-    series_title = normalize_for_matching(@book.series)
+    release_title = normalize_for_series_identity(@search_result.title)
+    series_title = normalize_for_series_identity(@book.series)
     return if release_title.blank? || series_title.blank?
 
     match = release_title.match(/(?:\A|\s)#{Regexp.escape(series_title)}(?:\z|\s)/)
@@ -456,7 +456,7 @@ class ReleaseScorer
     # Only inspect the identity token immediately following the exact series
     # phrase. This avoids mistaking years, bitrates, or numbers embedded in the
     # series name itself for an installment number.
-    match = tail.match(/\A(?<position>\d+(?:\.\d+)?)(?:\s|\z)/)
+    match = tail.match(/\A(?:book\s+|bk\s+|#\s*)?(?<position>\d+(?:\.\d+)?)(?:\s|\z)/)
     return nil unless match
 
     normalize_series_position(match[:position])
@@ -499,6 +499,18 @@ class ReleaseScorer
   end
 
   # Normalize text for matching
+  def normalize_for_series_identity(text)
+    return "" if text.blank?
+
+    normalized = text
+      .downcase
+      .gsub(/[^a-z0-9.\s]/, " ")
+      .gsub(/\s+/, " ")
+      .strip
+
+    normalize_number_tokens(normalized)
+  end
+
   def normalize_for_matching(text)
     return "" if text.blank?
 
