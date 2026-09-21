@@ -137,7 +137,7 @@
                       <%= request.book.book_type_label %>
                     </span>
                     <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium <%= request_status_color(request.status) %>">
-                      <%= request.status.humanize %>
+                      <%= request_status_label(request) %>
                     </span>
                     <% if @library_matches_by_book&.dig(request.book_id)&.any? %>
                       <% match = @library_matches_by_book[request.book_id].first %>
