@@ -75,6 +75,8 @@ class HardcoverClient
     :release_date, :release_year
   )
 
+  SeriesLookupResult = Data.define(:id, :name)
+
   class << self
     def configured?
       SettingsService.get(:hardcover_enabled, default: true) && SettingsService.hardcover_configured?
@@ -110,6 +112,43 @@ class HardcoverClient
       end
 
       results.filter_map { |result| parse_search_result(result) }
+    end
+
+    # Resolve a Hardcover series by exact case-insensitive name.
+    # This intentionally refuses fuzzy/ambiguous matches so unattended backlog
+    # automation never imports the wrong series.
+    def find_series_exact(name)
+      ensure_configured!
+
+      requested_name = name.to_s.strip
+      raise ArgumentError, "Series name is required" if requested_name.blank?
+
+      query_string = <<~GRAPHQL
+        query FindSeriesByName($name: String!) {
+          series(
+            where: { name: { _ilike: $name } }
+            order_by: { id: asc }
+            limit: 10
+          ) {
+            id
+            name
+          }
+        }
+      GRAPHQL
+
+      response = execute_query(query_string, { name: requested_name })
+      matches = Array(response.dig("data", "series")).select do |series|
+        series["name"].to_s.casecmp?(requested_name)
+      end
+
+      raise NotFoundError, "Series not found: #{requested_name}" if matches.empty?
+      if matches.size > 1
+        ids = matches.map { |series| series["id"] }.join(", ")
+        raise Error, "Ambiguous series '#{requested_name}' matched multiple Hardcover IDs: #{ids}"
+      end
+
+      match = matches.first
+      SeriesLookupResult.new(id: match["id"].to_s, name: match["name"].to_s)
     end
 
     # Get book details by Hardcover book ID
