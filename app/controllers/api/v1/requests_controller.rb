@@ -40,6 +40,7 @@ class API::V1::RequestsController < API::V1::ApplicationController
       language: create_params[:language],
       source_work_ids: create_params[:source_work_ids],
       collection_item_ids: create_params[:collection_item_ids],
+      watch_series: create_params.key?(:watch_series) ? ActiveModel::Type::Boolean.new.cast(create_params[:watch_series]) : true,
       origin: {
         created_via: "api",
         external_source: create_params[:external_source].presence || "api",
@@ -184,6 +185,7 @@ class API::V1::RequestsController < API::V1::ApplicationController
       :external_source,
       :external_user_id,
       :external_chat_id,
+      :watch_series,
       source_work_ids: [],
       book_types: [],
       collection_item_ids: []
