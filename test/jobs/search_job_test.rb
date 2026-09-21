@@ -773,10 +773,10 @@ class SearchJobTest < ActiveJob::TestCase
       external_source: "series_watch"
     )
 
-    failed_selection = AutoSelectService::Result.new(
-      success: false,
+    failed_selection = AutoSelectService::SelectionResult.new(
+      selected: false,
       search_result: nil,
-      reason: :below_threshold
+      reason: :below_confidence_threshold
     )
 
     AutoSelectService.stub(:call, failed_selection) do
