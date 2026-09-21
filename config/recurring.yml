@@ -58,6 +58,10 @@ default: &default
     args:
       - scheduled: true
     schedule: every minute
+  watched_series_refresh:
+    class: WatchedSeriesRefreshJob
+    queue: default
+    schedule: at 4am every day
 
 development:
   <<: *default
