@@ -107,6 +107,55 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:format] == 100
   end
 
+  test "treats standalone audio extensions as audiobook format evidence" do
+    [ "MP3", "M4A", "OGG", "OPUS", "FLAC" ].each do |extension|
+      result = ReleaseScorer.score(
+        SearchResult.new(
+          title: "The Name of the Wind - Patrick Rothfuss [#{extension}]",
+          seeders: 10
+        ),
+        @request
+      )
+
+      assert_equal :audiobook, result.detected_format, extension
+      assert_equal 100, result.breakdown[:format], extension
+    end
+  end
+
+  test "blocks dramatized adaptations from audiobook auto selection" do
+    normal = ReleaseScorer.score(
+      SearchResult.new(
+        title: "The Name of the Wind - Patrick Rothfuss [MP3] [192 Kbps]",
+        seeders: 10
+      ),
+      @request
+    )
+    dramatized = ReleaseScorer.score(
+      SearchResult.new(
+        title: "The Name of the Wind - Patrick Rothfuss (Dramatization) [MP3]",
+        seeders: 10
+      ),
+      @request
+    )
+    big_finish = ReleaseScorer.score(
+      SearchResult.new(
+        title: "Big Finish - The Name of the Wind - Patrick Rothfuss [MP3]",
+        seeders: 10
+      ),
+      @request
+    )
+
+    assert normal.breakdown[:auto_select_allowed]
+    refute normal.breakdown[:audiobook_adaptation]
+
+    [ dramatized, big_finish ].each do |result|
+      refute result.breakdown[:auto_select_allowed]
+      assert result.breakdown[:audiobook_adaptation]
+      assert_equal(-25, result.breakdown[:audiobook_adaptation_adjustment])
+      assert_operator result.total, :<, normal.total
+    end
+  end
+
   test "scores format mismatch for ebook when audiobook requested" do
     search_result = @request.search_results.create!(
       guid: "test-6",
