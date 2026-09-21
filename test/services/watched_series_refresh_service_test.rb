@@ -1,0 +1,103 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
+  setup do
+    @user = users(:one)
+    clear_enqueued_jobs
+  end
+
+  test "requests only series books Shelfarr has never seen and includes side material" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "987",
+      title: "Test Series",
+      book_types: [ "audiobook" ]
+    )
+
+    Book.create!(
+      title: "Existing Book",
+      author: "Series Author",
+      book_type: :audiobook,
+      hardcover_id: "111"
+    )
+
+    items = [
+      MetadataCollectionService::Item.new(
+        work_id: "hardcover:111",
+        source_work_ids: [ "hardcover:111" ],
+        metadata_attrs: {
+          title: "Existing Book",
+          author: "Series Author",
+          series: "Test Series",
+          series_position: "1"
+        }
+      ),
+      MetadataCollectionService::Item.new(
+        work_id: "hardcover:222",
+        source_work_ids: [ "hardcover:222" ],
+        metadata_attrs: {
+          title: "Side Story",
+          author: "Series Author",
+          series: "Test Series",
+          series_position: "1.5"
+        }
+      )
+    ]
+
+    result = MetadataCollectionService.stub(:expand, items) do
+      MetadataService.stub(:book_details, nil) do
+        assert_difference [ "Book.count", "Request.count" ], 1 do
+          WatchedSeriesRefreshService.call(watched)
+        end
+      end
+    end
+
+    assert_equal 1, result.created_requests.size
+    assert_equal 1, result.skipped_items
+    request = result.created_requests.first
+    assert_equal "222", request.book.hardcover_id
+    assert_equal "1.5", request.book.series_position
+    assert_equal "Test Series", request.collection_title
+    assert_equal "series_watch", request.external_source
+    assert_equal "api", request.created_via
+    assert watched.reload.last_success_at.present?
+  end
+
+  test "does not re-request a previously known failed series book" do
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "987",
+      title: "Test Series",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "Known Book",
+      book_type: :audiobook,
+      hardcover_id: "333"
+    )
+    Request.create!(user: @user, book: book, status: :failed)
+
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:333",
+      source_work_ids: [ "hardcover:333" ],
+      metadata_attrs: {
+        title: "Known Book",
+        series: "Test Series",
+        series_position: "2"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      assert_no_difference "Request.count" do
+        result = WatchedSeriesRefreshService.call(watched)
+        assert_equal 1, result.skipped_items
+      end
+    end
+  end
+end
