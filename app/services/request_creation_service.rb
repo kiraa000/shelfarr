@@ -169,6 +169,15 @@ class RequestCreationService
       collection_id: metadata_attrs[:collection_id]
     )
 
+    WatchedSeriesRegistrationService.register!(
+      user: user,
+      collection_source: metadata_attrs[:collection_source],
+      collection_id: metadata_attrs[:collection_id],
+      title: metadata_attrs[:collection_title].presence || metadata_attrs[:title],
+      book_types: book_types,
+      language: language
+    )
+
     CollectionRequestExpansionJob.perform_later(
       user_id: user.id,
       work_id: work_id,
