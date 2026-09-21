@@ -14,10 +14,17 @@ class WatchedSeriesRefreshJob < ApplicationJob
       begin
         result = WatchedSeriesRefreshService.call(watched)
         Rails.logger.info(
-          "[WatchedSeriesRefreshJob] #{watched.title} (#{watched.collection_id}): "           "created=#{result.created_requests.size} skipped=#{result.skipped_items} errors=#{result.errors.size}"
+          "[WatchedSeriesRefreshJob] #{watched.title} (#{watched.collection_id}): " \
+          "created=#{result.created_requests.size} skipped=#{result.skipped_items} errors=#{result.errors.size}"
         )
-      rescue MetadataCollectionService::Error
-        raise
+      rescue MetadataCollectionService::Error => e
+        raise if e.cause.is_a?(HardcoverClient::RateLimitError)
+
+        Rails.logger.warn(
+          "[WatchedSeriesRefreshJob] #{watched.title} (#{watched.collection_id}) failed: #{e.class}: #{e.message}"
+        )
+
+        break if e.cause.is_a?(HardcoverClient::AuthenticationError)
       rescue StandardError => e
         Rails.logger.warn(
           "[WatchedSeriesRefreshJob] #{watched.title} (#{watched.collection_id}) failed: #{e.class}: #{e.message}"
