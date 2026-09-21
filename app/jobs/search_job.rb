@@ -750,8 +750,11 @@ class SearchJob < ApplicationJob
 
     if result.success?
       Rails.logger.info "[SearchJob] Auto-selected result for request ##{request.id}"
+    elsif request.monitored_hardcover_series_request?
+      request.schedule_retry!
+      Rails.logger.info "[SearchJob] No safe auto-select match for monitored Hardcover series request ##{request.id}; scheduled another check"
     else
-      # Auto-select failed to find a suitable result, flag for manual selection
+      # Ordinary requests still surface ambiguous results for manual selection.
       request.mark_for_attention!("Search results found but none matched auto-select criteria. Please review and select a result manually.")
       Rails.logger.info "[SearchJob] Auto-select failed, flagged for manual selection for request ##{request.id}"
     end
