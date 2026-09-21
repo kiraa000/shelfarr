@@ -82,6 +82,16 @@ class ReleaseParserServiceTest < ActiveSupport::TestCase
     assert_equal :audiobook, ReleaseParserService.detect_format("Book Title Audiobook MP3")
   end
 
+  test "detect_format identifies audiobook from bare audio extensions" do
+    assert_equal :audiobook, ReleaseParserService.detect_format("Book Title MP3")
+    assert_equal :audiobook, ReleaseParserService.detect_format("Book Title OGG")
+    assert_equal :audiobook, ReleaseParserService.detect_format("Book Title OPUS")
+  end
+
+  test "detect_format identifies spaced audio book marker" do
+    assert_equal :audiobook, ReleaseParserService.detect_format("Book Title Audio book")
+  end
+
   test "detect_format identifies audiobook from Unabridged" do
     assert_equal :audiobook, ReleaseParserService.detect_format("Book Title Unabridged")
   end
@@ -137,6 +147,10 @@ class ReleaseParserServiceTest < ActiveSupport::TestCase
 
   test "detect_audiobook_structure identifies multi file releases" do
     assert_equal :multi_file, ReleaseParserService.detect_audiobook_structure("Book Title Audiobook MP3 Chapters")
+  end
+
+  test "bare mp3 does not imply a multi file audiobook" do
+    assert_nil ReleaseParserService.detect_audiobook_structure("Book Title MP3")
   end
 
   test "language_info returns correct data for known language" do
