@@ -432,10 +432,13 @@ class ReleaseScorer
     return unless requested
 
     release_title = normalize_for_series_identity(@search_result.title)
-    series_title = normalize_for_series_identity(series_name)
-    return if release_title.blank? || series_title.blank?
+    series_titles = audiobook_series_title_variants(series_name)
+    return if release_title.blank? || series_titles.empty?
 
-    match = release_title.match(/(?:\A|\s)#{Regexp.escape(series_title)}(?:\z|\s)/)
+    match = series_titles.filter_map do |series_title|
+      candidate = release_title.match(/(?:\A|\s)#{Regexp.escape(series_title)}(?:\z|\s)/)
+      candidate && [ candidate, series_title.length ]
+    end.max_by { |candidate, length| [ length, -candidate.begin(0) ] }&.first
     return { status: :unknown, requested: requested, detected: nil } unless match
 
     tail = release_title[match.end(0)..].to_s.strip
@@ -450,6 +453,16 @@ class ReleaseScorer
 
     status = detected == requested ? :exact : :mismatch
     { status: status, requested: requested, detected: detected }
+  end
+
+  def audiobook_series_title_variants(series_name)
+    normalized = normalize_for_series_identity(series_name)
+    return [] if normalized.blank?
+
+    variants = [ normalized ]
+    stripped = normalized.sub(/\A(?:the|a|an)\s+/, "")
+    variants << stripped if stripped.present? && stripped != normalized
+    variants.uniq
   end
 
   def requested_audiobook_series_position(series_name)
