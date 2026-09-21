@@ -23,7 +23,7 @@ class RequestCreationService
     end
   end
 
-  def initialize(user:, work_id:, book_types:, metadata_attrs: {}, notes: nil, language: nil, origin: {}, source_work_ids: nil, collection_item_ids: nil, expand_collection: false)
+  def initialize(user:, work_id:, book_types:, metadata_attrs: {}, notes: nil, language: nil, origin: {}, source_work_ids: nil, collection_item_ids: nil, expand_collection: false, watch_series: true)
     @user = user
     @work_id = work_id.to_s.strip
     @source_work_ids = BookMetadataLookupService.normalize_work_ids([ @work_id, *Array(source_work_ids) ])
@@ -35,6 +35,7 @@ class RequestCreationService
     @origin = origin.to_h.symbolize_keys
     @collection_item_ids = Array(collection_item_ids).compact_blank.map(&:to_s).uniq
     @expand_collection = expand_collection
+    @watch_series = ActiveModel::Type::Boolean.new.cast(watch_series)
   end
 
   def call
@@ -94,7 +95,7 @@ class RequestCreationService
 
   private
 
-  attr_reader :user, :work_id, :source_work_ids, :book_types, :metadata_attrs, :notes, :language, :origin, :collection_item_ids
+  attr_reader :user, :work_id, :source_work_ids, :book_types, :metadata_attrs, :notes, :language, :origin, :collection_item_ids, :watch_series
 
   def failure(message)
     Result.new(created_requests: [], warnings: [], errors: [ message ])
@@ -175,7 +176,8 @@ class RequestCreationService
       collection_id: metadata_attrs[:collection_id],
       title: metadata_attrs[:collection_title].presence || metadata_attrs[:title],
       book_types: book_types,
-      language: language
+      language: language,
+      enabled: watch_series
     )
 
     CollectionRequestExpansionJob.perform_later(
