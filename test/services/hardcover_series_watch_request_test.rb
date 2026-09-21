@@ -39,4 +39,28 @@ class HardcoverSeriesWatchRequestTest < ActiveSupport::TestCase
     assert_equal "Test Series", watched.title
     assert_equal [ "audiobook" ], watched.normalized_book_types
   end
+  test "requesting a Hardcover collection can explicitly opt out of watching" do
+    HardcoverClient.stub(:configured?, true) do
+      result = RequestCreationService.call(
+        user: @user,
+        work_id: "hardcover:series-988",
+        book_types: [ "audiobook" ],
+        metadata_attrs: {
+          title: "Optional Watch Series",
+          content_kind: "book",
+          request_scope: "collection",
+          collection_source: "hardcover",
+          collection_id: "988",
+          collection_title: "Optional Watch Series"
+        },
+        watch_series: false
+      )
+
+      assert result.queued?
+    end
+
+    watched = WatchedSeries.find_by!(collection_id: "988")
+    assert_not watched.enabled?
+  end
+
 end
