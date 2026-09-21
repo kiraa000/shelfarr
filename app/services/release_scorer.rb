@@ -7,6 +7,7 @@ class ReleaseScorer
   COMIC_ISSUE_UNKNOWN_MAX_SCORE = 49
   COMIC_ISSUE_VALUE_PATTERN = '\d+(?:\.\d+)?(?:[a-z]|-[a-z])?'
   AUDIOBOOK_ADAPTATION_PENALTY = -25
+  AUDIOBOOK_SERIES_UNKNOWN_MAX_SCORE = 69
   AUDIOBOOK_ADAPTATION_PATTERNS = [
     /\bdramat(?:ization|isation|ized|ised)\b/i,
     /\bradio\s+(?:drama|play|dramatization|dramatisation)\b/i,
@@ -61,6 +62,7 @@ class ReleaseScorer
     @parsed = ReleaseParserService.parse(search_result.title)
     @format_preferences = FormatPreferenceService.evaluate(title: search_result.title, book_type: @book.book_type, parsed: @parsed)
     @comic_issue_match = classify_comic_issue_match
+    @audiobook_series_match = classify_audiobook_series_match
   end
 
   # Calculate the confidence score
@@ -69,11 +71,13 @@ class ReleaseScorer
     issue_status = @comic_issue_match&.fetch(:status, nil)
     format_score = calculate_format_score
     adaptation = audiobook_adaptation?
+    audiobook_series_status = @audiobook_series_match&.fetch(:status, nil)
     auto_select_allowed = @format_preferences.auto_select_allowed &&
       !explicit_format_conflict? &&
       !ambiguous_title_alias_match? &&
       !adaptation &&
-      (@comic_issue_match.nil? || issue_status == :exact)
+      (@comic_issue_match.nil? || issue_status == :exact) &&
+      (@audiobook_series_match.nil? || audiobook_series_status == :exact)
     breakdown = {
       title: calculate_title_score,
       author: calculate_author_score,
@@ -97,6 +101,13 @@ class ReleaseScorer
         issue_adjustment: comic_issue_adjustment
       )
     end
+    if @audiobook_series_match
+      breakdown.merge!(
+        audiobook_series_match: @audiobook_series_match[:status],
+        requested_series_position: @audiobook_series_match[:requested],
+        detected_series_position: @audiobook_series_match[:detected]
+      )
+    end
 
     # Calculate weighted total
     base_total = WEIGHTS.sum do |key, weight|
@@ -111,6 +122,8 @@ class ReleaseScorer
     ).clamp(0, 100)
     total = [ total, COMIC_ISSUE_UNKNOWN_MAX_SCORE ].min if issue_status == :unknown
     total = 0 if issue_status == :mismatch
+    total = [ total, AUDIOBOOK_SERIES_UNKNOWN_MAX_SCORE ].min if audiobook_series_status == :unknown
+    total = 0 if audiobook_series_status == :mismatch
 
     Result.new(
       total: total,
@@ -407,6 +420,58 @@ class ReleaseScorer
     return @book.comic_vine_id.to_s.start_with?("4000-") if requested_year.blank?
 
     detected[:run_year] != requested_year
+  end
+
+  def classify_audiobook_series_match
+    return unless @book.audiobook?
+    return if @book.series.blank? || @book.series_position.blank?
+
+    requested = normalize_series_position(@book.series_position)
+    return unless requested
+
+    release_title = normalize_for_matching(@search_result.title)
+    series_title = normalize_for_matching(@book.series)
+    return if release_title.blank? || series_title.blank?
+
+    match = release_title.match(/(?:\A|\s)#{Regexp.escape(series_title)}(?:\z|\s)/)
+    return { status: :unknown, requested: requested, detected: nil } unless match
+
+    tail = release_title[match.end(0)..].to_s.strip
+    detected = detect_leading_series_position(tail)
+
+    if detected.nil?
+      # Unnumbered releases are a normal representation of book 1, but are
+      # ambiguous for later installments and must never auto-select there.
+      status = requested == "1" ? :exact : :unknown
+      return { status: status, requested: requested, detected: status == :exact ? "1" : nil }
+    end
+
+    status = detected == requested ? :exact : :mismatch
+    { status: status, requested: requested, detected: detected }
+  end
+
+  def detect_leading_series_position(tail)
+    return nil if tail.blank?
+
+    # Only inspect the identity token immediately following the exact series
+    # phrase. This avoids mistaking years, bitrates, or numbers embedded in the
+    # series name itself for an installment number.
+    match = tail.match(/\A(?<position>\d+(?:\.\d+)?)(?:\s|\z)/)
+    return nil unless match
+
+    normalize_series_position(match[:position])
+  end
+
+  def normalize_series_position(value)
+    raw = value.to_s.strip
+    match = raw.match(/\A(?:book\s*)?(\d+(?:\.\d+)?)\z/i)
+    return nil unless match
+
+    number = BigDecimal(match[1])
+    normalized = number.frac.zero? ? number.to_i.to_s : number.to_s("F").sub(/0+\z/, "").sub(/\.\z/, "")
+    normalized
+  rescue ArgumentError
+    nil
   end
 
   def audiobook_adaptation?
