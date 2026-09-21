@@ -16,6 +16,36 @@ class RequestTest < ActiveSupport::TestCase
     }, Request.statuses)
   end
 
+  test "per-series watch toggle controls monitored request behavior" do
+    book = Book.create!(
+      title: "Toggle Series Book",
+      book_type: :audiobook,
+      hardcover_id: "toggle-book"
+    )
+    request = Request.create!(
+      book: book,
+      user: users(:one),
+      status: :not_found,
+      collection_source: "hardcover",
+      collection_id: "toggle-series",
+      collection_title: "Toggle Series"
+    )
+    watched = WatchedSeries.create!(
+      user: users(:one),
+      collection_source: "hardcover",
+      collection_id: "toggle-series",
+      title: "Toggle Series",
+      book_types: [ "audiobook" ],
+      enabled: true
+    )
+
+    assert request.monitored_hardcover_series_request?
+
+    watched.update!(enabled: false)
+
+    assert_not request.monitored_hardcover_series_request?
+  end
+
   test "monitored Hardcover audiobook series requests keep retrying after the normal limit without attention" do
     SettingsService.set(:max_retries, 2)
     SettingsService.set(:retry_max_delay_days, 7)
