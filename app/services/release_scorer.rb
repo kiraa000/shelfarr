@@ -61,12 +61,15 @@ class ReleaseScorer
   def score
     issue_status = @comic_issue_match&.fetch(:status, nil)
     format_score = calculate_format_score
+    title_score = calculate_title_score
+    embedded_title_reference = embedded_title_reference?
     auto_select_allowed = @format_preferences.auto_select_allowed &&
       !explicit_format_conflict? &&
       !ambiguous_title_alias_match? &&
+      !embedded_title_reference &&
       (@comic_issue_match.nil? || issue_status == :exact)
     breakdown = {
-      title: calculate_title_score,
+      title: title_score,
       author: calculate_author_score,
       language: calculate_language_score,
       format: format_score,
@@ -131,7 +134,7 @@ class ReleaseScorer
     # Localized/original title aliases are equivalent only as complete phrases.
     # Very short inferred titles are too collision-prone unless they lead the
     # release name (for example, "It" must not match "The Institute").
-    if book_titles.any? { |title| exact_title_phrase_match?(release_title, title) }
+    if book_titles.any? { |title| exact_title_identity_match?(release_title, title) }
       100
     else
       book_titles.map { |title| trigram_similarity(release_title, title) }.max
@@ -144,6 +147,42 @@ class ReleaseScorer
     return true if book_title.length >= 4
 
     release_title == book_title || release_title.start_with?("#{book_title} ")
+  end
+
+  # A whole title phrase is not necessarily the identity of the release.
+  # For example, "Stories Inspired by H G Wells The Time Machine EPUB"
+  # references the requested book but is a different work. Treat a title as
+  # exact only when it leads the release, or when the only leading text is the
+  # requested author (a common "Author - Title" naming convention).
+  def exact_title_identity_match?(release_title, book_title)
+    phrase = /(?:\A|\s)#{Regexp.escape(book_title)}(?:\z|\s)/
+    match = release_title.match(phrase)
+    return false unless match
+    return false unless exact_title_phrase_match?(release_title, book_title)
+
+    prefix = release_title[0...match.begin(0)].to_s.squish
+    return true if prefix.blank?
+
+    author = normalize_for_matching(@book.author)
+    return false if author.blank?
+    return true if prefix == author
+
+    author_parts = author.split
+    last_name = author_parts.last
+    last_name.present? && last_name.length > 3 && prefix == last_name
+  end
+
+  def embedded_title_reference?
+    release_title = normalize_for_matching(@search_result.title)
+    return false if release_title.blank?
+
+    SearchTitleVariantService.call(@book.title)
+      .map { |title| normalize_for_matching(title) }
+      .reject(&:blank?)
+      .any? do |title|
+        exact_title_phrase_match?(release_title, title) &&
+          !exact_title_identity_match?(release_title, title)
+      end
   end
 
   def ambiguous_title_alias_match?
