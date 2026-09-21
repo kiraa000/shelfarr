@@ -149,6 +149,45 @@ class WatchedSeriesRefreshServiceTest < ActiveSupport::TestCase
     assert_equal "1", book.series_position
   end
 
+  test "re-pushes acquired watched-book metadata to Audiobookshelf" do
+    SettingsService.set(:library_platform, "audiobookshelf")
+    SettingsService.set(:audiobookshelf_url, "http://localhost:13378")
+    SettingsService.set(:audiobookshelf_api_key, "test-api-key")
+
+    watched = WatchedSeries.create!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "29395",
+      title: "The Primal Hunter",
+      book_types: [ "audiobook" ]
+    )
+    book = Book.create!(
+      title: "The Primal Hunter",
+      author: "Zogarth",
+      book_type: :audiobook,
+      hardcover_id: "111",
+      series: "The Primal Hunter",
+      series_position: "1",
+      file_path: "/audiobooks/Zogarth/The Primal Hunter (2022)"
+    )
+    item = MetadataCollectionService::Item.new(
+      work_id: "hardcover:111",
+      source_work_ids: [ "hardcover:111" ],
+      metadata_attrs: {
+        title: "The Primal Hunter",
+        author: "Zogarth",
+        series: "The Primal Hunter",
+        series_position: "1"
+      }
+    )
+
+    MetadataCollectionService.stub(:expand, [ item ]) do
+      assert_enqueued_with(job: AudiobookshelfMetadataSyncJob, args: [ book.id ]) do
+        WatchedSeriesRefreshService.call(watched)
+      end
+    end
+  end
+
   test "does not re-request a previously known failed series book" do
     watched = WatchedSeries.create!(
       user: @user,
