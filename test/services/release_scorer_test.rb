@@ -169,6 +169,44 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:author] == 100
   end
 
+  test "scores bare audio extensions as audiobook format and blocks dramatizations" do
+    SettingsService.set(:audiobook_preferred_formats, [ "m4b", "mp3", "m4a", "ogg" ])
+    SettingsService.set(:audiobook_prefer_higher_bitrate, true)
+
+    book = Book.create!(
+      title: "The Time Machine",
+      author: "H. G. Wells",
+      book_type: :audiobook
+    )
+    request = Request.create!(book: book, user: @user, status: :pending, language: "en")
+
+    standard = ReleaseScorer.score(
+      SearchResult.new(title: "The Time Machine - H. G. Wells [MP3] [192 Kbps]", seeders: 1),
+      request
+    )
+    author_first = ReleaseScorer.score(
+      SearchResult.new(title: "H.G.Wells The Time Machine [MP3]", seeders: 15),
+      request
+    )
+    dramatization = ReleaseScorer.score(
+      SearchResult.new(title: "Big Finish - The Time Machine - H.G.Wells, Marc Platt [MP3]", seeders: 10),
+      request
+    )
+
+    assert_equal :audiobook, standard.detected_format
+    assert_equal 100, standard.breakdown[:format]
+    assert_operator standard.total, :>=, 90
+    assert standard.breakdown[:auto_select_allowed]
+
+    assert_equal 100, author_first.breakdown[:title]
+    assert author_first.breakdown[:auto_select_allowed]
+
+    assert dramatization.breakdown[:audiobook_adaptation]
+    assert dramatization.breakdown[:embedded_title_reference]
+    refute dramatization.breakdown[:auto_select_allowed]
+    assert_operator dramatization.breakdown[:title], :<, 100
+  end
+
   test "scores localized and original components of a combined title as aliases" do
     SettingsService.set(:ebook_approved_formats, [])
     SettingsService.set(:ebook_rejected_formats, [])
