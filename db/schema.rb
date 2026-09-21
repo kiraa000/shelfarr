@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_20_212000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_20_223000) do
   create_table "acquisition_providers", force: :cascade do |t|
     t.boolean "allow_private_network", default: false, null: false
     t.string "api_key"
@@ -553,6 +553,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_212000) do
     t.index ["user_id"], name: "index_uploads_on_user_id"
   end
 
+  create_table "watched_series", force: :cascade do |t|
+    t.json "book_types", default: [], null: false
+    t.string "collection_id", null: false
+    t.string "collection_source", default: "hardcover", null: false
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.string "language"
+    t.datetime "last_checked_at"
+    t.text "last_error"
+    t.datetime "last_success_at"
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_id", null: false
+    t.index ["enabled"], name: "index_watched_series_on_enabled"
+    t.index ["user_id", "collection_source", "collection_id"], name: "index_watched_series_on_user_and_collection", unique: true
+    t.index ["user_id"], name: "index_watched_series_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.text "backup_codes"
     t.datetime "created_at", null: false
@@ -608,4 +626,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_20_212000) do
   add_foreign_key "uploads", "books"
   add_foreign_key "uploads", "requests"
   add_foreign_key "uploads", "users"
+  add_foreign_key "watched_series", "users"
 end
