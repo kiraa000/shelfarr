@@ -30,6 +30,46 @@ class WatchedSeriesRegistrationServiceTest < ActiveSupport::TestCase
     assert watched.enabled?
   end
 
+  test "register can explicitly disable a series so backfill does not opt it back in" do
+    watched = WatchedSeriesRegistrationService.register!(
+      user: @user,
+      collection_source: "hardcover",
+      collection_id: "987",
+      title: "Test Series",
+      book_types: [ "audiobook" ],
+      enabled: false
+    )
+
+    assert_not watched.enabled?
+  end
+
+  test "backfills an existing Hardcover audiobook collection request as watched" do
+    book = Book.create!(
+      title: "Existing Series Book",
+      book_type: :audiobook,
+      hardcover_id: "123"
+    )
+    Request.create!(
+      user: @user,
+      book: book,
+      status: :completed,
+      request_scope: "collection",
+      collection_source: "hardcover",
+      collection_id: "29395",
+      collection_title: "The Primal Hunter"
+    )
+
+    assert_difference "WatchedSeries.count", 1 do
+      assert_equal 1, WatchedSeriesRegistrationService.backfill_existing!
+    end
+
+    watched = WatchedSeries.last
+    assert_equal "29395", watched.collection_id
+    assert_equal "The Primal Hunter", watched.title
+    assert_equal [ "audiobook" ], watched.normalized_book_types
+    assert watched.enabled?
+  end
+
   test "backfill does not re-enable a disabled watch" do
     watched = WatchedSeries.create!(
       user: @user,
