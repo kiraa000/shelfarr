@@ -3,7 +3,7 @@
 class WatchedSeriesRefreshJob < ApplicationJob
   queue_as :default
 
-  retry_on HardcoverClient::RateLimitError, wait: :polynomially_longer, attempts: 3
+  retry_on MetadataCollectionService::Error, wait: :polynomially_longer, attempts: 3
 
   def perform
     WatchedSeriesRegistrationService.backfill_existing!
@@ -16,7 +16,7 @@ class WatchedSeriesRefreshJob < ApplicationJob
         Rails.logger.info(
           "[WatchedSeriesRefreshJob] #{watched.title} (#{watched.collection_id}): "           "created=#{result.created_requests.size} skipped=#{result.skipped_items} errors=#{result.errors.size}"
         )
-      rescue HardcoverClient::RateLimitError
+      rescue MetadataCollectionService::Error
         raise
       rescue StandardError => e
         Rails.logger.warn(
