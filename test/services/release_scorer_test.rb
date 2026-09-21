@@ -287,6 +287,78 @@ class ReleaseScorerTest < ActiveSupport::TestCase
     assert result.breakdown[:author] == 80
   end
 
+  test "infers book one from collection metadata when stored series position is missing" do
+    book = Book.create!(
+      title: "The Primal Hunter",
+      author: "Zogarth",
+      book_type: :audiobook,
+      series: nil,
+      series_position: nil
+    )
+    request = Request.create!(
+      book: book,
+      user: @user,
+      status: :pending,
+      language: "en",
+      collection_source: "hardcover",
+      collection_id: "29395",
+      collection_title: "The Primal Hunter"
+    )
+
+    correct = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+    wrong = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter 3 - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+
+    assert_equal :exact, correct.breakdown[:audiobook_series_match]
+    assert_equal "1", correct.breakdown[:requested_series_position]
+    assert correct.breakdown[:auto_select_allowed]
+
+    assert_equal :mismatch, wrong.breakdown[:audiobook_series_match]
+    assert_equal "1", wrong.breakdown[:requested_series_position]
+    assert_equal "3", wrong.breakdown[:detected_series_position]
+    assert_equal 0, wrong.total
+    refute wrong.breakdown[:auto_select_allowed]
+  end
+
+  test "infers later installment from title when stored series position is missing" do
+    book = Book.create!(
+      title: "The Primal Hunter 4",
+      author: "Zogarth",
+      book_type: :audiobook,
+      series: nil,
+      series_position: nil
+    )
+    request = Request.create!(
+      book: book,
+      user: @user,
+      status: :pending,
+      language: "en",
+      collection_source: "hardcover",
+      collection_id: "29395",
+      collection_title: "The Primal Hunter"
+    )
+
+    exact = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter 4 - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+    wrong = ReleaseScorer.score(
+      SearchResult.new(title: "The Primal Hunter 14 - Zogarth [M4B] [128 Kbps]", seeders: 1),
+      request
+    )
+
+    assert_equal :exact, exact.breakdown[:audiobook_series_match]
+    assert_equal "4", exact.breakdown[:requested_series_position]
+    assert_equal :mismatch, wrong.breakdown[:audiobook_series_match]
+    assert_equal "14", wrong.breakdown[:detected_series_position]
+    assert_equal 0, wrong.total
+  end
+
   test "rejects a conflicting audiobook installment even when the series title matches" do
     book = Book.create!(
       title: "The Primal Hunter",
