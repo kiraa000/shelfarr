@@ -424,13 +424,15 @@ class ReleaseScorer
 
   def classify_audiobook_series_match
     return unless @book.audiobook?
-    return if @book.series.blank? || @book.series_position.blank?
 
-    requested = normalize_series_position(@book.series_position)
+    series_name = @book.series.presence || @request.collection_title.presence
+    return if series_name.blank?
+
+    requested = requested_audiobook_series_position(series_name)
     return unless requested
 
     release_title = normalize_for_series_identity(@search_result.title)
-    series_title = normalize_for_series_identity(@book.series)
+    series_title = normalize_for_series_identity(series_name)
     return if release_title.blank? || series_title.blank?
 
     match = release_title.match(/(?:\A|\s)#{Regexp.escape(series_title)}(?:\z|\s)/)
@@ -448,6 +450,22 @@ class ReleaseScorer
 
     status = detected == requested ? :exact : :mismatch
     { status: status, requested: requested, detected: detected }
+  end
+
+  def requested_audiobook_series_position(series_name)
+    explicit = normalize_series_position(@book.series_position)
+    return explicit if explicit
+
+    normalized_title = normalize_for_series_identity(@book.title)
+    normalized_series = normalize_for_series_identity(series_name)
+    return nil if normalized_title.blank? || normalized_series.blank?
+
+    return "1" if normalized_title == normalized_series
+
+    match = normalized_title.match(/\A#{Regexp.escape(normalized_series)}\s+(?:book\s+|bk\s+|#\s*)?(?<position>\d+(?:\.\d+)?)(?:\s|\z)/)
+    return nil unless match
+
+    normalize_series_position(match[:position])
   end
 
   def detect_leading_series_position(tail)
